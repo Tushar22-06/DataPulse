@@ -1,0 +1,40 @@
+
+# Secrets and environment variables
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Java / Spring Boot
+target/
+*.class
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+coverage/
+
+# Data and local databases
+data/raw/
+data/processed/
+*.duckdb
+*.db
+
+# IDE and operating system files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
