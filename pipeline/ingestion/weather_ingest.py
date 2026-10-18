@@ -6,6 +6,8 @@ from pathlib import Path
 
 import requests
 
+from pipeline.analytics.run_logger import log_pipeline_run
+
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -57,8 +59,7 @@ def validate_weather(data: dict) -> None:
     if not isinstance(current["time"], str) or not current["time"].strip():
         raise ValueError("'time' must be a non-empty string.")
 
-    numeric_fields = REQUIRED_FIELDS[1:]
-    for field in numeric_fields:
+    for field in REQUIRED_FIELDS[1:]:
         value = current[field]
         if (
             isinstance(value, bool)
@@ -89,13 +90,37 @@ def save_raw_snapshot(data: dict) -> Path:
 
 
 def main() -> None:
-    weather_data = fetch_weather()
-    validate_weather(weather_data)
-    output_path = save_raw_snapshot(weather_data)
+    started_at = datetime.now(timezone.utc)
 
-    print("Weather data fetched and validated successfully.")
-    print(f"Raw snapshot saved to: {output_path}")
-    print(json.dumps(weather_data["current"], indent=2))
+    try:
+        weather_data = fetch_weather()
+        validate_weather(weather_data)
+        output_path = save_raw_snapshot(weather_data)
+
+        log_pipeline_run(
+            pipeline_name="weather_ingestion",
+            status="SUCCESS",
+            records_processed=1,
+            started_at=started_at,
+        )
+
+        print("Weather data fetched and validated successfully.")
+        print(f"Raw snapshot saved to: {output_path}")
+        print(json.dumps(weather_data["current"], indent=2))
+
+    except Exception as error:
+        try:
+            log_pipeline_run(
+                pipeline_name="weather_ingestion",
+                status="FAILED",
+                records_processed=0,
+                started_at=started_at,
+                error_message=f"{type(error).__name__}: {error}",
+            )
+        except Exception as logging_error:
+            print(f"Warning: failed to write pipeline log: {logging_error}")
+
+        raise
 
 
 if __name__ == "__main__":
