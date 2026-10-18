@@ -1,5 +1,6 @@
 
 import json
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -23,12 +24,55 @@ PARAMS = {
     "timezone": "Asia/Kolkata",
 }
 
+REQUIRED_FIELDS = (
+    "time",
+    "temperature_2m",
+    "relative_humidity_2m",
+    "apparent_temperature",
+    "precipitation",
+    "wind_speed_10m",
+)
+
 
 def fetch_weather() -> dict:
     """Fetch current weather data for Hyderabad."""
     response = requests.get(API_URL, params=PARAMS, timeout=30)
     response.raise_for_status()
     return response.json()
+
+
+def validate_weather(data: dict) -> None:
+    """Raise ValueError if the API response fails basic quality checks."""
+    if not isinstance(data, dict):
+        raise ValueError("Response must be a JSON object.")
+
+    current = data.get("current")
+    if not isinstance(current, dict):
+        raise ValueError("Missing or invalid 'current' object.")
+
+    missing = [field for field in REQUIRED_FIELDS if field not in current]
+    if missing:
+        raise ValueError(f"Missing required weather fields: {missing}")
+
+    if not isinstance(current["time"], str) or not current["time"].strip():
+        raise ValueError("'time' must be a non-empty string.")
+
+    numeric_fields = REQUIRED_FIELDS[1:]
+    for field in numeric_fields:
+        value = current[field]
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+        ):
+            raise ValueError(f"'{field}' must be a finite number.")
+
+    if not 0 <= current["relative_humidity_2m"] <= 100:
+        raise ValueError("Humidity must be between 0 and 100.")
+
+    for field in ("precipitation", "wind_speed_10m"):
+        if current[field] < 0:
+            raise ValueError(f"'{field}' cannot be negative.")
 
 
 def save_raw_snapshot(data: dict) -> Path:
@@ -46,9 +90,10 @@ def save_raw_snapshot(data: dict) -> Path:
 
 def main() -> None:
     weather_data = fetch_weather()
+    validate_weather(weather_data)
     output_path = save_raw_snapshot(weather_data)
 
-    print(f"Weather data fetched successfully.")
+    print("Weather data fetched and validated successfully.")
     print(f"Raw snapshot saved to: {output_path}")
     print(json.dumps(weather_data["current"], indent=2))
 
