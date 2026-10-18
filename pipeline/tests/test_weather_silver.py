@@ -45,3 +45,42 @@ def test_transform_preserves_ingestion_timestamp():
 def test_transform_rejects_missing_current_data():
     with pytest.raises(KeyError):
         transform_snapshot({"latitude": 17.385}, "2026-10-18T17:32:23+00:00")
+
+
+def test_build_silver_records_deduplicates_observations(
+    tmp_path, monkeypatch
+):
+    import json
+    import pipeline.transformation.weather_silver as silver
+
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+
+    snapshot = {
+        "latitude": 17.385,
+        "longitude": 78.4867,
+        "current": {
+            "time": "2026-10-18T23:00",
+            "temperature_2m": 26.7,
+            "apparent_temperature": 30.2,
+            "relative_humidity_2m": 71,
+            "precipitation": 0.0,
+            "wind_speed_10m": 6.2,
+        },
+    }
+
+    # Two files contain the same observation.
+    (raw_dir / "weather_001.json").write_text(
+        json.dumps(snapshot), encoding="utf-8"
+    )
+    (raw_dir / "weather_002.json").write_text(
+        json.dumps(snapshot), encoding="utf-8"
+    )
+
+    monkeypatch.setattr(silver, "RAW_DATA_DIR", raw_dir)
+
+    records = silver.build_silver_records()
+
+    assert len(records) == 1
+    assert records[0]["observation_time"] == "2026-10-18T23:00"
+    assert records[0]["temperature_c"] == 26.7

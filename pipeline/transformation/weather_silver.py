@@ -39,14 +39,15 @@ def transform_snapshot(data: dict, ingested_at: str) -> dict:
     }
 
 
+
 def build_silver_records() -> list[dict]:
-    """Read raw snapshots and create one record per snapshot."""
+    """Read raw snapshots and deduplicate by observation time and location."""
     if not RAW_DATA_DIR.exists():
         raise FileNotFoundError(
             f"Raw weather directory not found: {RAW_DATA_DIR}"
         )
 
-    records = []
+    records_by_key = {}
 
     for path in sorted(RAW_DATA_DIR.glob("*.json")):
         with path.open(encoding="utf-8") as file:
@@ -57,9 +58,19 @@ def build_silver_records() -> list[dict]:
             tz=timezone.utc,
         ).isoformat()
 
-        records.append(transform_snapshot(data, ingested_at))
+        record = transform_snapshot(data, ingested_at)
 
-    return records
+        key = (
+            record["observation_time"],
+            record["latitude"],
+            record["longitude"],
+        )
+
+        # Sorted filenames are processed in order, so the latest
+        # filename wins if duplicate observation keys are encountered.
+        records_by_key[key] = record
+
+    return list(records_by_key.values())
 
 
 def write_silver_csv(records: list[dict]) -> Path:
