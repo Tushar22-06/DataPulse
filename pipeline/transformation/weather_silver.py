@@ -1,7 +1,10 @@
 
+import csv
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+
+from pipeline.analytics.run_logger import log_pipeline_run
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -39,7 +42,6 @@ def transform_snapshot(data: dict, ingested_at: str) -> dict:
     }
 
 
-
 def build_silver_records() -> list[dict]:
     """Read raw snapshots and deduplicate by observation time and location."""
     if not RAW_DATA_DIR.exists():
@@ -66,8 +68,7 @@ def build_silver_records() -> list[dict]:
             record["longitude"],
         )
 
-        # Sorted filenames are processed in order, so the latest
-        # filename wins if duplicate observation keys are encountered.
+        # Later sorted filenames overwrite earlier duplicate observations.
         records_by_key[key] = record
 
     return list(records_by_key.values())
@@ -75,8 +76,6 @@ def build_silver_records() -> list[dict]:
 
 def write_silver_csv(records: list[dict]) -> Path:
     """Write Silver records to a CSV file."""
-    import csv
-
     SILVER_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     with OUTPUT_FILE.open("w", newline="", encoding="utf-8") as file:
@@ -88,11 +87,37 @@ def write_silver_csv(records: list[dict]) -> Path:
 
 
 def main() -> None:
-    records = build_silver_records()
-    output_path = write_silver_csv(records)
+    started_at = datetime.now(timezone.utc)
+    records_processed = 0
 
-    print(f"Silver transformation completed: {len(records)} records")
-    print(f"Output saved to: {output_path}")
+    try:
+        records = build_silver_records()
+        records_processed = len(records)
+        output_path = write_silver_csv(records)
+
+        log_pipeline_run(
+            pipeline_name="weather_silver",
+            status="SUCCESS",
+            records_processed=records_processed,
+            started_at=started_at,
+        )
+
+        print(f"Silver transformation completed: {records_processed} records")
+        print(f"Output saved to: {output_path}")
+
+    except Exception as error:
+        try:
+            log_pipeline_run(
+                pipeline_name="weather_silver",
+                status="FAILED",
+                records_processed=records_processed,
+                started_at=started_at,
+                error_message=f"{type(error).__name__}: {error}",
+            )
+        except Exception as logging_error:
+            print(f"Warning: failed to write pipeline log: {logging_error}")
+
+        raise
 
 
 if __name__ == "__main__":
