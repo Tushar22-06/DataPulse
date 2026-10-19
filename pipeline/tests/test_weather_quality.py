@@ -1,3 +1,5 @@
+import math
+
 from pipeline.quality.weather_quality import validate_silver_records
 
 
@@ -62,4 +64,21 @@ def test_non_numeric_temperature_is_flagged():
     issues = validate_silver_records([record])
 
     assert any("temperature_c must be numeric" in issue for issue in issues)
-    
+
+
+def test_nan_temperature_is_flagged():
+    record = valid_record()
+    record["temperature_c"] = math.nan
+
+    issues = validate_silver_records([record])
+
+    assert any("temperature_c must be finite" in issue for issue in issues)
+
+
+def test_infinite_wind_speed_is_flagged():
+    record = valid_record()
+    record["wind_speed_kmh"] = math.inf
+
+    issues = validate_silver_records([record])
+
+    assert any("wind_speed_kmh must be finite" in issue for issue in issues)
