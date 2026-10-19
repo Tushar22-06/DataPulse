@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from pipeline.analytics.run_logger import log_pipeline_run
-
+from pipeline.quality.weather_quality import validate_silver_records
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw" / "weather"
@@ -93,6 +93,23 @@ def main() -> None:
     try:
         records = build_silver_records()
         records_processed = len(records)
+
+        quality_issues = validate_silver_records(records)
+
+        if quality_issues:
+            formatted_issues = "\n".join(
+                f"- {issue}" for issue in quality_issues
+            )
+            raise ValueError(
+                f"Silver data quality validation failed "
+                f"with {len(quality_issues)} issue(s):\n"
+                f"{formatted_issues}"
+            )
+
+        print(
+            f"Data quality checks passed for {records_processed} records."
+        )
+
         output_path = write_silver_csv(records)
 
         log_pipeline_run(
@@ -102,7 +119,9 @@ def main() -> None:
             started_at=started_at,
         )
 
-        print(f"Silver transformation completed: {records_processed} records")
+        print(
+            f"Silver transformation completed: {records_processed} records"
+        )
         print(f"Output saved to: {output_path}")
 
     except Exception as error:
