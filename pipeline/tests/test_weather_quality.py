@@ -1,7 +1,7 @@
 import math
 
 from pipeline.quality.weather_quality import validate_silver_records
-
+from pipeline.quality.weather_quality import build_quality_report
 
 def valid_record():
     return {
@@ -82,3 +82,26 @@ def test_infinite_wind_speed_is_flagged():
     issues = validate_silver_records([record])
 
     assert any("wind_speed_kmh must be finite" in issue for issue in issues)
+
+def test_quality_report_for_valid_records():
+    records = [valid_record(), valid_record()]
+    issues = []
+
+    report = build_quality_report(records, issues)
+
+    assert report["records_checked"] == 2
+    assert report["issues_found"] == 0
+    assert report["status"] == "PASSED"
+    assert report["issues"] == []
+
+
+def test_quality_report_for_invalid_records():
+    records = [valid_record()]
+    issues = ["Record 1: humidity_pct must be between 0 and 100"]
+
+    report = build_quality_report(records, issues)
+
+    assert report["records_checked"] == 1
+    assert report["issues_found"] == 1
+    assert report["status"] == "FAILED"
+    assert report["issues"] == issues

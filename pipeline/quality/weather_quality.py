@@ -84,3 +84,15 @@ def validate_silver_records(records: list[dict]) -> list[str]:
             seen_keys.add(key)
 
     return issues
+
+def build_quality_report(
+    records: list[dict],
+    issues: list[str],
+) -> dict:
+    """Build a summary report for Silver data-quality validation."""
+    return {
+        "records_checked": len(records),
+        "issues_found": len(issues),
+        "status": "PASSED" if not issues else "FAILED",
+        "issues": issues,
+    }

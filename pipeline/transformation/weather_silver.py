@@ -1,11 +1,13 @@
-
 import csv
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 from pipeline.analytics.run_logger import log_pipeline_run
-from pipeline.quality.weather_quality import validate_silver_records
+from pipeline.quality.weather_quality import (
+    build_quality_report,
+    validate_silver_records,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw" / "weather"
@@ -87,6 +89,7 @@ def write_silver_csv(records: list[dict]) -> Path:
 
 
 def main() -> None:
+    """Build, validate, and write Silver weather records."""
     started_at = datetime.now(timezone.utc)
     records_processed = 0
 
@@ -94,7 +97,14 @@ def main() -> None:
         records = build_silver_records()
         records_processed = len(records)
 
+        # Run data-quality validation and build a structured report.
         quality_issues = validate_silver_records(records)
+        quality_report = build_quality_report(records, quality_issues)
+
+        print("\n--- Silver data-quality report ---")
+        print(f"Records checked: {quality_report['records_checked']}")
+        print(f"Issues found: {quality_report['issues_found']}")
+        print(f"Status: {quality_report['status']}")
 
         if quality_issues:
             formatted_issues = "\n".join(
@@ -106,10 +116,9 @@ def main() -> None:
                 f"{formatted_issues}"
             )
 
-        print(
-            f"Data quality checks passed for {records_processed} records."
-        )
+        print("Data quality checks passed.")
 
+        # Write only after all quality checks pass.
         output_path = write_silver_csv(records)
 
         log_pipeline_run(
